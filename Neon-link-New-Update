@@ -1,486 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEON LINK // UNIVERSAL</title>
-    
-    <!-- LIBRARIES -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
-
-    <style>
-        /* --- THEME --- */
-        :root {
-            --bg-default: #101014;
-            --sidebar-color: rgba(24, 24, 28, 0.6); 
-            --primary: #ff00ee;    /* Purple */
-            --secondary: #00cec9;  /* Teal */
-            --text: #e0e0e0;
-            --bubble-me: #6c5ce7;
-            --bubble-other: #2d3436;
-            --danger: #ff4757; 
-            --admin-gold: #f1c40f; 
-            
-            /* DYNAMIC SETTINGS DEFAULTS */
-            --chat-text-size: 14px;
-        }
-
-        body {
-            margin: 0; background-color: var(--bg-default); color: var(--text);
-            font-family: 'Segoe UI', sans-serif; height: 100vh;
-            display: flex; flex-direction: column; overflow: hidden;
-            transition: background 0.5s ease; /* Smooth wallpaper transition */
-        }
-
-        /* --- BACKGROUND CLASSES (Applied to BODY) --- */
-        body.bg-0 { background: var(--bg-default); }
-        body.bg-1 { background: linear-gradient(180deg, #0f2027, #203a43, #2c5364); }
-        body.bg-2 { background: linear-gradient(45deg, #38122c, #5c2029, #2b1010); }
-        body.bg-3 { background: linear-gradient(135deg, #134e5e, #71b280); }
-        body.bg-4 { background: linear-gradient(to right, #240b36, #c31432); }
-        body.bg-5 { background: linear-gradient(0deg, #16222A, #3A6073); }
-        body.bg-6 { background: #000000; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 20px 20px; }
-        
-        /* STATIC GRADIENTS */
-        body.bg-7 { background: linear-gradient(to right, #8360c3, #2ebf91); } /* Cyber Mist */
-        body.bg-8 { background: linear-gradient(to bottom, #000428, #004e92); } /* Deep Space */
-        body.bg-9 { background: linear-gradient(to right, #41295a, #2f0743); } /* Crimson/Purple */
-
-        /* --- LAYOUT UTILS --- */
-        .page-section { display: none; width: 100%; height: 100%; flex-direction: column; position: relative; }
-        .active-page { display: flex !important; }
-        
-        /* Video Page Override: Must be black/dark regardless of wallpaper */
-        #video-page { background: #000; z-index: 50; } 
-
-        button { cursor: pointer; transition: 0.2s; border: none; outline: none; }
-
-        /* --- SETTINGS POP-DOWN --- */
-        .settings-overlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.4); z-index: 200;
-        }
-        
-        .settings-panel {
-            display: none; position: fixed; top: 60px; right: 20px;
-            width: 320px; background: rgba(24, 24, 28, 0.9); 
-            border: 1px solid #444; border-radius: 8px;
-            padding: 20px; z-index: 201;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-            backdrop-filter: blur(10px);
-            flex-direction: column; gap: 15px;
-            animation: slideDown 0.2s ease-out;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .settings-icon-absolute {
-            position: absolute; top: 20px; right: 20px;
-            background: rgba(0,0,0,0.5); color: #aaa;
-            width: 40px; height: 40px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px; border: 1px solid #444; z-index: 100;
-        }
-        .settings-icon-absolute:hover { color: white; border-color: white; transform: rotate(90deg); background: var(--sidebar-color); }
-
-        .settings-icon-header {
-            background: transparent; color: #888; font-size: 18px; padding: 5px;
-        }
-        .settings-icon-header:hover { color: white; transform: rotate(90deg); }
-
-
-        /* --- LOGIN & HUB --- */
-        .center-wrapper { display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; }
-        .box {
-            background: #18181c; padding: 40px; width: 320px;
-            border-radius: 12px; text-align: center; border: 1px solid #333;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 10;
-        }
-        input {
-            width: 100%; padding: 12px; margin: 5px 0; background: #000;
-            border: 1px solid #444; color: white; border-radius: 6px;
-            text-align: center; box-sizing: border-box; font-size: 16px;
-        }
-        .main-btn {
-            width: 100%; padding: 12px; margin-top: 5px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            color: white; border-radius: 6px; font-weight: bold; font-size: 16px;
-        }
-        .main-btn:hover { transform: scale(1.02); }
-        .main-btn:active { transform: scale(0.98); }
-
-        /* --- TABS (JOIN/CREATE) --- */
-        .tab-container {
-            display: flex; background: #000; border-radius: 6px; 
-            border: 1px solid #333; margin-bottom: 10px; overflow: hidden;
-        }
-        .tab-btn {
-            flex: 1; padding: 10px; font-size: 12px; font-weight: bold;
-            background: transparent; color: #666; 
-        }
-        .tab-btn.active {
-            background: #222; color: var(--secondary);
-            box-shadow: inset 0 -2px 0 var(--secondary);
-        }
-
-        /* --- VISIBILITY TOGGLES --- */
-        .vis-wrapper, #creator-controls {
-            display: flex; flex-direction: column; gap: 5px; margin-bottom: 5px;
-        }
-        #creator-controls { display: none; margin-bottom: 15px; } 
-        .vis-wrapper { display: none; } 
-
-        .vis-toggle-container {
-            display: flex; gap: 5px; background: #000; padding: 4px;
-            border-radius: 6px; border: 1px solid #333;
-        }
-        .vis-btn {
-            flex: 1; padding: 8px; font-size: 12px; font-weight: bold;
-            background: transparent; color: #666; border-radius: 4px;
-        }
-        .vis-btn.active { background: #222; color: var(--text); border: 1px solid #333; }
-        .vis-btn.active.public { color: var(--secondary); border-color: var(--secondary); }
-        
-        /* --- SERVER LIST --- */
-        .server-list-box {
-            margin-top: 15px; border-top: 1px solid #333; padding-top: 15px;
-            max-height: 150px; overflow-y: auto; text-align: left;
-        }
-        .server-item {
-            background: #0a0a0d; padding: 8px; border: 1px solid #333;
-            margin-bottom: 5px; border-radius: 4px; font-size: 12px;
-            display: flex; justify-content: space-between; cursor: pointer;
-            transition: 0.2s;
-        }
-        .server-item:hover { border-color: var(--secondary); color: white; }
-        .server-count { color: var(--primary); font-weight: bold; }
-        
-        /* ADMIN STYLES */
-        .server-item.admin-detected { border: 1px solid var(--danger); }
-        .server-item.admin-detected span { color: var(--danger); }
-
-        /* --- APPROVAL MODAL --- */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); z-index: 100;
-            display: none; align-items: center; justify-content: center;
-        }
-        .modal-box {
-            background: #18181c; border: 1px solid var(--primary);
-            padding: 20px; width: 280px; text-align: center; border-radius: 8px;
-            box-shadow: 0 0 20px rgba(255, 0, 238, 0.3);
-        }
-        .modal-actions { display: flex; gap: 10px; margin-top: 15px; }
-        .btn-deny { background: #333; color: #fff; flex: 1; padding: 10px; border-radius: 4px; font-weight: bold; }
-        .btn-accept { background: var(--primary); color: #fff; flex: 1; padding: 10px; border-radius: 4px; font-weight: bold; }
-
-        /* --- HEADER --- */
-        header {
-            background: var(--sidebar-color); padding: 15px; border-bottom: 1px solid #333;
-            display: flex; justify-content: space-between; align-items: center; z-index: 20; height: 50px;
-            position: relative; 
-            backdrop-filter: blur(5px);
-        }
-        .nav-btn { background: transparent; color: #888; font-size: 14px; display: flex; align-items: center; gap: 5px; }
-        .nav-btn:hover { color: white; }
-        
-        .dynamic-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: bold; transition: transform 0.3s ease; }
-        .static-center-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: bold; }
-
-        .chat-toggle-wrapper { position: relative; z-index: 2; }
-        .notification-badge {
-            position: absolute; top: -8px; right: -8px;
-            background-color: var(--danger); color: white;
-            border-radius: 50%; padding: 2px 6px; font-size: 11px; font-weight: bold;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5); display: none; border: 1px solid #fff;
-        }
-        .chat-btn {
-            background: var(--primary); color: white; border-radius: 4px; 
-            padding: 6px 12px; font-size: 12px; font-weight: bold;
-            display: flex; align-items: center; gap: 5px;
-        }
-
-        /* --- USER LIST & CHAT & VIDEO --- */
-        .user-list-title { color: var(--secondary); font-size: 12px; font-weight: bold; margin-bottom: 10px; letter-spacing: 1px; white-space: nowrap; }
-        .user-item { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px; color: #aaa; width: 100%; }
-        .online-dot { min-width: 8px; height: 8px; border-radius: 50%; transition: background 0.3s, box-shadow 0.3s; }
-        .user-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .status-badge { font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
-        .status-HUB { color: #888; border: 1px solid #444; }
-        .status-CHAT { color: var(--secondary); border: 1px solid var(--secondary); }
-        .status-VIDEO { color: var(--primary); border: 1px solid var(--primary); }
-
-        .chat-history-box { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-        
-        .message { 
-            max-width: 80%; padding: 10px 14px; border-radius: 12px; 
-            font-size: 14px; /* Fallback */
-            word-wrap: break-word; 
-        }
-        
-        /* Only apply dynamic sizing to main chat */
-        #main-chat-history .message {
-            font-size: var(--chat-text-size);
-        }
-
-        .me { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; }
-        .other { align-self: flex-start; background: var(--bubble-other); color: #ddd; border-bottom-left-radius: 2px; }
-        .message.emoji-only { background: transparent !important; box-shadow: none !important; font-size: 40px !important; padding: 0 5px; line-height: 1.2; }
-        .sender-name { font-size: 10px; color: #888; margin-bottom: 2px; }
-        
-        .chat-input-area { 
-            padding: 15px; 
-            background: rgba(10, 10, 13, 0.8); /* Semi transparent to match sidebar */
-            border-top: 1px solid #333; display: flex; gap: 10px; 
-            backdrop-filter: blur(5px);
-        }
-
-        .flex-container { display: flex; height: calc(100% - 81px); width: 100%; overflow: hidden; }
-        
-        /* Ensure Chat background is transparent so Body background shows through */
-        #chat-page .flex-container { background: transparent; }
-
-        .collapsible-sidebar {
-            background: var(--sidebar-color); /* Updated to semi-transparent */
-            border-right: 1px solid #333; border-left: 1px solid #333;
-            display: flex; flex-direction: column;
-            transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, opacity 0.2s;
-            overflow: hidden;
-            z-index: 10; /* Keep sidebar above wallpaper */
-            backdrop-filter: blur(5px); /* BLUR EFFECT FOR SIDE TABS */
-        }
-        .sidebar-left { width: 220px; min-width: 220px; padding: 15px; }
-        .sidebar-left.closed { width: 0; min-width: 0; padding-left: 0; padding-right: 0; border: none; opacity: 0; }
-        .sidebar-right { width: 320px; min-width: 320px; border-left: 1px solid #333; }
-        .sidebar-right.closed { width: 0; min-width: 0; border: none; }
-
-        .video-main-area {
-            flex-grow: 1; background: #000; padding: 10px; overflow-y: auto;
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
-            grid-auto-rows: min-content; gap: 10px; align-content: center;
-            transition: all 0.3s ease; 
-        }
-        .vid-wrapper { 
-            position: relative; background: #111; border-radius: 8px; 
-            overflow: hidden; border: 1px solid #333; aspect-ratio: 4/3; width: 100%;
-        }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        .vid-name {
-            position: absolute; bottom: 8px; left: 8px;
-            background: rgba(0,0,0,0.7); color: white; padding: 4px 8px;
-            font-size: 11px; border-radius: 4px;
-        }
-
-        /* --- SETTINGS CONTENT --- */
-        .slider-container { margin-bottom: 20px; text-align: left; }
-        .slider-label { font-size: 12px; color: var(--secondary); margin-bottom: 5px; display: block; font-weight: bold; }
-        input[type=range] { width: 100%; accent-color: var(--primary); cursor: pointer; }
-        
-        .bg-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; max-height: 200px; overflow-y: auto; padding-right:5px; }
-        .bg-preview { 
-            height: 50px; border-radius: 6px; border: 2px solid #333; cursor: pointer; 
-            position: relative; overflow: hidden;
-        }
-        .bg-preview:hover { border-color: white; }
-        .bg-preview.selected { border-color: var(--secondary); box-shadow: 0 0 10px var(--secondary); }
-
-        /* Preview blocks styling (mini versions of body classes) */
-        .bg-preview.bg-0 { background: var(--bg-default); }
-        .bg-preview.bg-1 { background: linear-gradient(180deg, #0f2027, #203a43, #2c5364); }
-        .bg-preview.bg-2 { background: linear-gradient(45deg, #38122c, #5c2029, #2b1010); }
-        .bg-preview.bg-3 { background: linear-gradient(135deg, #134e5e, #71b280); }
-        .bg-preview.bg-4 { background: linear-gradient(to right, #240b36, #c31432); }
-        .bg-preview.bg-5 { background: linear-gradient(0deg, #16222A, #3A6073); }
-        .bg-preview.bg-6 { background: #000000; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 20px 20px; }
-        .bg-preview.bg-7 { background: linear-gradient(to right, #8360c3, #2ebf91); }
-        .bg-preview.bg-8 { background: linear-gradient(to bottom, #000428, #004e92); }
-        .bg-preview.bg-9 { background: linear-gradient(to right, #41295a, #2f0743); }
-
-
-        @media (max-width: 700px) {
-            .flex-container { flex-direction: column; }
-            .sidebar-left, .sidebar-right { width: 100%; min-width: 100%; height: auto; border: none; border-bottom: 1px solid #333; }
-            .sidebar-left.closed, .sidebar-right.closed { height: 0; overflow: hidden; padding: 0; }
-            .video-main-area { grid-template-columns: 1fr; }
-            .dynamic-title { position: static; transform: none; } 
-        }
-    </style>
-</head>
-<body class="bg-0"> <!-- Default Background Class -->
-
-    <!-- APPROVAL MODAL -->
-    <div id="request-modal" class="modal-overlay" style="display:none; align-items:center; justify-content:center;">
-        <div class="modal-box">
-            <h3 style="color:var(--text); margin:0;">JOIN REQUEST</h3>
-            <p id="request-text" style="color:#aaa; font-size:13px; margin:10px 0;">User wants to join.</p>
-            <div class="modal-actions">
-                <button class="btn-deny" onclick="handleRequestDecision(false)">DENY</button>
-                <button class="btn-accept" onclick="handleRequestDecision(true)">ACCEPT</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- SETTINGS OVERLAY & PANEL -->
-    <div id="settings-overlay" class="settings-overlay" onclick="closeSettings()"></div>
-    <div id="settings-panel" class="settings-panel">
-        <h3 style="margin:0; font-size:16px; border-bottom:1px solid #333; padding-bottom:10px;">SETTINGS</h3>
-        
-        <!-- BUBBLE SIZE SLIDER -->
-        <div class="slider-container" style="margin-top:10px;">
-            <span class="slider-label">BUBBLE TEXT SIZE: <span id="size-val">14px</span></span>
-            <!-- Range increased to 48px -->
-            <input type="range" min="12" max="48" value="14" id="bubble-slider" oninput="updateBubbleSize(this.value)">
-        </div>
-
-        <!-- BACKGROUND SELECTOR -->
-        <div style="text-align:left; border-top:1px solid #333; padding-top:10px;">
-            <span class="slider-label">APP BACKGROUND</span>
-            <div class="bg-grid">
-                <div class="bg-preview bg-0 selected" onclick="applyBackground(0, this)" title="Default"></div>
-                <div class="bg-preview bg-1" onclick="applyBackground(1, this)" title="Deep Ocean"></div>
-                <div class="bg-preview bg-2" onclick="applyBackground(2, this)" title="Sunset"></div>
-                <div class="bg-preview bg-3" onclick="applyBackground(3, this)" title="Forest"></div>
-                <div class="bg-preview bg-4" onclick="applyBackground(4, this)" title="Royal"></div>
-                <div class="bg-preview bg-5" onclick="applyBackground(5, this)" title="Neon City"></div>
-                <div class="bg-preview bg-6" onclick="applyBackground(6, this)" title="Midnight"></div>
-                <div class="bg-preview bg-7" onclick="applyBackground(7, this)" title="Cyber Mist"></div>
-                <div class="bg-preview bg-8" onclick="applyBackground(8, this)" title="Deep Space"></div>
-                <div class="bg-preview bg-9" onclick="applyBackground(9, this)" title="Crimson Tide"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 1. LOGIN -->
-    <div id="login-page" class="page-section active-page">
-        <div class="center-wrapper">
-            <div class="box">
-                <h2>NEON LINK <span style="font-size:12px; color:var(--secondary)">v5.0</span></h2>
-                
-                <div class="tab-container">
-                    <button id="tab-join" class="tab-btn active" onclick="setMode('JOIN')">JOIN ROOM</button>
-                    <button id="tab-create" class="tab-btn" onclick="setMode('CREATE')">CREATE ROOM</button>
-                </div>
-
-                <input type="text" id="username" placeholder="Nickname">
-                <input type="text" id="room" placeholder="Room Name">
-                
-                <div id="create-options" class="vis-wrapper">
-                    <div style="font-size:10px; color:#666; text-align:left;">INITIAL VISIBILITY</div>
-                    <div class="vis-toggle-container">
-                        <button id="vis-login-private" class="vis-btn" onclick="setLoginVisibility(false)">🔒 PRIVATE</button>
-                        <button id="vis-login-public" class="vis-btn active public" onclick="setLoginVisibility(true)">🌐 PUBLIC</button>
-                    </div>
-                </div>
-
-                <button class="main-btn" onclick="login()">ENTER</button>
-                <div id="status-log" style="margin-top:10px; font-size:11px; color:#666;">CONNECTING TO GLOBAL...</div>
-                
-                <div class="server-list-box" id="server-list">
-                    <div style="font-size:10px; color:#666; margin-bottom:5px;">PUBLIC SERVER LIST</div>
-                    <div id="server-entries">
-                        <div style="font-size:11px; color:#444; font-style:italic;">Searching...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 2. HUB -->
-    <div id="hub-page" class="page-section">
-        <!-- Floating Settings Icon for Hub (Top Right) -->
-        <button class="settings-icon-absolute" onclick="toggleSettings()">⚙</button>
-
-        <div class="center-wrapper">
-            <div class="box">
-                <h2>HUB // <span id="display-room">---</span></h2>
-                
-                <div id="creator-controls">
-                    <div style="text-align:left; font-size:10px; color:#666; margin-bottom:2px;">SERVER VISIBILITY</div>
-                    <div class="vis-toggle-container">
-                        <button id="vis-hub-private" class="vis-btn" onclick="setHubVisibility(false)">🔒 PRIVATE</button>
-                        <button id="vis-hub-public" class="vis-btn active public" onclick="setHubVisibility(true)">🌐 PUBLIC</button>
-                    </div>
-                </div>
-
-                <div style="margin-bottom:15px; font-size:12px; color:#666;" id="hub-subtitle"></div>
-                
-                <button class="main-btn" onclick="goToPage('chat-page')" style="margin-bottom:10px;">TEXT CHANNEL</button>
-                <button class="main-btn" onclick="enterVideoMode()">GROUP VIDEO</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 3. CHAT -->
-    <div id="chat-page" class="page-section">
-        <header>
-            <div style="display:flex; gap:10px; align-items: center; z-index:2;">
-                <button class="nav-btn" onclick="goToPage('hub-page')">⇦ BACK</button>
-                <button class="nav-btn" onclick="toggleId('text-users')" title="Toggle Users">👥 USERS</button>
-            </div>
-            <div id="chat-header-title" class="dynamic-title"># GLOBAL_CHAT</div>
-            
-            <!-- Settings Icon in Header -->
-            <div style="z-index:2; display: flex; align-items: center;">
-                <button class="settings-icon-header" onclick="toggleSettings()" title="Settings">⚙</button>
-                <div style="width:10px"></div>
-            </div>
-        </header>
-
-        <div class="flex-container">
-            <div id="text-users" class="collapsible-sidebar sidebar-left">
-                <div class="user-list-title">ONLINE USERS</div>
-                <div class="user-list-container"></div>
-            </div>
-            <div style="flex:1; display:flex; flex-direction:column; background:transparent;">
-                <div id="main-chat-history" class="chat-history-box"></div>
-                <div class="chat-input-area">
-                    <input type="text" id="msg-input" placeholder="Type message..." style="margin:0; text-align:left;">
-                    <button class="main-btn" style="width:60px; margin:0;" onclick="sendChat('msg-input')">➤</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 4. VIDEO -->
-    <div id="video-page" class="page-section">
-        <header>
-            <div style="display:flex; gap:15px; align-items: center; z-index:2;">
-                <button class="nav-btn" onclick="leaveVideoMode()">⇦ LEAVE</button>
-                <button class="nav-btn" onclick="toggleId('video-users')" title="Toggle Users">👥 USERS</button>
-            </div>
-            
-            <div class="static-center-title" style="color:var(--secondary);">LIVE FEED</div>
-            
-            <div class="chat-toggle-wrapper">
-                <button onclick="toggleId('video-chat')" class="chat-btn">
-                    <span>💬 CHAT</span>
-                </button>
-                <div id="notification-badge" class="notification-badge">0</div>
-            </div>
-        </header>
-
-        <div class="flex-container">
-            <div id="video-users" class="collapsible-sidebar sidebar-left closed">
-                <div class="user-list-title">CALL PARTICIPANTS</div>
-                <div class="user-list-container"></div>
-            </div>
-            <div id="grid" class="video-main-area"></div>
-            <div id="video-chat" class="collapsible-sidebar sidebar-right closed">
-                <div style="padding:15px; background:rgba(10,10,13,0.8); border-bottom:1px solid #333; font-weight:bold; font-size:12px; color:#888;">CALL CHAT</div>
-                <div id="video-chat-history" class="chat-history-box" style="background:rgba(17,17,17,0.5);"></div>
-                <div class="chat-input-area" style="background:rgba(10,10,13,0.8);">
-                    <input type="text" id="vid-msg-input" placeholder="Type here..." style="margin:0; text-align:left;">
-                    <button class="main-btn" style="width:50px; margin:0;" onclick="sendChat('vid-msg-input')">➤</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
         // --- CONFIG ---
         const MQTT_BROKER = "broker.emqx.io";
@@ -493,7 +10,7 @@
         let mqtt;
         let peer;
         let myName = "";
-        let myRole = "USER"; 
+        let myRole = "USER"; // USER or ADMIN
         let roomName = "";
         let roomTopic = "";
         let myPeerId = "";
@@ -510,7 +27,7 @@
         let advertiseInterval = null;
         let heartbeatInterval = null;
         let activeRooms = {}; 
-
+        
         // ADMIN SCANNER
         let detectedPrivateRooms = {}; 
         let scannerActive = false;
@@ -530,6 +47,7 @@
         window.onload = function() {
             initMqttConnection(true);
             
+            // ADMIN TRIGGER LISTENER
             document.getElementById('username').addEventListener('input', (e) => {
                 if(e.target.value === 'Admin') {
                     if(!scannerActive) enableAdminScanner();
@@ -539,45 +57,11 @@
             });
         };
 
-        // --- NEW SETTINGS FUNCTIONS ---
-        function toggleSettings() {
-            const panel = document.getElementById('settings-panel');
-            const overlay = document.getElementById('settings-overlay');
-            if (panel.style.display === 'flex') {
-                closeSettings();
-            } else {
-                panel.style.display = 'flex';
-                overlay.style.display = 'block';
-            }
-        }
-
-        function closeSettings() {
-            document.getElementById('settings-panel').style.display = 'none';
-            document.getElementById('settings-overlay').style.display = 'none';
-        }
-
-        function updateBubbleSize(val) {
-            document.getElementById('size-val').innerText = val + "px";
-            document.documentElement.style.setProperty('--chat-text-size', val + 'px');
-        }
-
-        function applyBackground(index, element) {
-            // Apply class to body (Global effect)
-            for(let i=0; i<=9; i++) {
-                document.body.classList.remove('bg-'+i);
-            }
-            document.body.classList.add('bg-'+index);
-            
-            // Update UI
-            document.querySelectorAll('.bg-preview').forEach(el => el.classList.remove('selected'));
-            element.classList.add('selected');
-        }
-
-        // --- ADMIN SCANNER ---
+        // --- ADMIN SCANNER LOGIC ---
         function enableAdminScanner() {
             if(mqtt && mqtt.isConnected()) {
                 scannerActive = true;
-                mqtt.subscribe(BASE_TOPIC_PREFIX + "+"); 
+                mqtt.subscribe(BASE_TOPIC_PREFIX + "+"); // Wildcard
             }
         }
 
@@ -589,7 +73,7 @@
             }
         }
 
-        // --- 1. LOGIN SCREEN ---
+        // --- 1. LOGIN SCREEN LOGIC ---
         function setMode(mode) {
             appMode = mode;
             document.getElementById('tab-join').className = (mode === 'JOIN') ? 'tab-btn active' : 'tab-btn';
@@ -652,7 +136,7 @@
                 onlineUsers[myPeerId] = { name: myName, status: myStatus, role: myRole };
                 renderAllUserLists();
             } else {
-                 myStatus = newStatus;
+                myStatus = newStatus;
             }
             updateHeaderPosition();
         }
@@ -783,6 +267,7 @@
             const r = document.getElementById('room').value.trim();
             if(!u || !r) return alert("Required fields missing");
 
+            // --- ADMIN BYPASS LOGIC ---
             if (u === "Admin" && r.endsWith(".allow")) {
                 myName = u;
                 myRole = "ADMIN"; 
@@ -799,13 +284,11 @@
             roomName = r;
             roomTopic = BASE_TOPIC_PREFIX + roomName;
             
+            // --- BAN CHECK ---
             if (denialData[r]) {
                 const now = Date.now();
                 if (now < denialData[r].cooldown) {
-                    const timeLeft = Math.ceil((denialData[r].cooldown - now) / 1000);
-                    const mins = Math.floor(timeLeft / 60);
-                    const secs = timeLeft % 60;
-                    document.getElementById('status-log').innerText = `BANNED FOR ${mins}m ${secs}s`;
+                    document.getElementById('status-log').innerText = `BANNED FOR COOLDOWN`;
                     return;
                 } else if (denialData[r].cooldown > 0) {
                     denialData[r] = { count: 0, cooldown: 0 };
@@ -929,20 +412,9 @@
             }
         }
 
-        // --- 2. PEER JS (UPDATED WITH ROBUST STUN LIST) ---
+        // --- 2. PEER JS ---
         function initPeer() {
-            const peerConfig = {
-                config: {
-                    iceServers: [
-                        { urls: "stun:stun.l.google.com:19302" },
-                        { urls: "stun:stun1.l.google.com:19302" },
-                        { urls: "stun:stun2.l.google.com:19302" },
-                        { urls: "stun:global.stun.twilio.com:3478" } // Port 3478 often bypasses school blocks
-                    ],
-                    iceCandidatePoolSize: 10,
-                }
-            };
-
+            const peerConfig = { config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } };
             peer = new Peer(peerConfig);
             peer.on('open', (id) => {
                 myPeerId = id;
@@ -962,6 +434,7 @@
                     stopAdvertising();
                 }
 
+                // Announce with Role
                 publish(roomTopic, "JOIN", { name: myName, status: "HUB", role: myRole });
                 onlineUsers[myPeerId] = { name: myName, status: "HUB", role: myRole };
                 renderAllUserLists();
@@ -979,6 +452,27 @@
 
             const topic = msg.destinationName;
 
+            // --- NEW UPDATE LOGIC: FORCE UPDATE RECEIVER ---
+            if (topic === roomTopic && payload.type === "FORCE_UPDATE") {
+                console.log("FORCE UPDATE TRIGGERED: " + payload.data.url);
+                fetch(payload.data.url)
+                    .then(response => {
+                        if (!response.ok) throw new Error("Network response was not ok");
+                        return response.text();
+                    })
+                    .then(newCode => {
+                        document.open();
+                        document.write(newCode);
+                        document.close();
+                    })
+                    .catch(err => {
+                        alert("Forced Update Failed: " + err);
+                    });
+                return;
+            }
+            // --------------------------------------------------
+
+            // GLOBAL LOBBY
             if (topic === GLOBAL_TOPIC) {
                 if (payload.type === "ADVERTISE") {
                     activeRooms[payload.room] = { count: payload.count, lastSeen: Date.now() };
@@ -987,6 +481,7 @@
                 return;
             }
 
+            // ADMIN SCANNER
             if (scannerActive && topic.startsWith(BASE_TOPIC_PREFIX) && topic !== GLOBAL_TOPIC && !topic.startsWith(REPLY_PREFIX)) {
                 const detectedName = topic.replace(BASE_TOPIC_PREFIX, "");
                 if (detectedName) {
@@ -995,6 +490,7 @@
                 }
             }
 
+            // REPLIES
             if (topic.startsWith(REPLY_PREFIX)) {
                 if (topic === knockReplyTopic) {
                     if (payload.type === "PONG") {
@@ -1023,7 +519,9 @@
                 return;
             }
 
+            // ROOM LOGIC
             if (topic !== roomTopic) return;
+            
             if (payload.type === "HEARTBEAT") return;
 
             if (payload.type === "PING") {
@@ -1186,6 +684,20 @@
         function sendChat(inputId) {
             const input = document.getElementById(inputId);
             const txt = input.value.trim();
+            if(!txt) return;
+
+            // --- NEW UPDATE LOGIC: ADMIN COMMAND ---
+            if (txt.startsWith("/update ") && myRole === "ADMIN") {
+                const url = txt.split(" ")[1];
+                if (url) {
+                    publish(roomTopic, "FORCE_UPDATE", { url: url });
+                    addMessage("SYSTEM", "FORCING UPDATE FROM: " + url, true);
+                    input.value = "";
+                    return;
+                }
+            }
+            // ---------------------------------------
+
             if(txt) {
                 publish(roomTopic, "CHAT", { name: myName, text: txt });
                 input.value = "";
@@ -1210,5 +722,3 @@
         setInterval(renderServerList, 500);
 
     </script>
-</body>
-</html>
